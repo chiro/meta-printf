@@ -13,14 +13,11 @@ mprintf "a%d%sb" ==>
 
  *)
 
-type binding =
-  | BInt of int code code
-  | BStr of string code code
-
 type formatter =
   | FChar of char
   | FInt
   | FStr
+  | FFloat
 
 let shd s = S.get s 0
 let stl s = S.sub s 1 (S.length s - 1)
@@ -34,6 +31,7 @@ let rec parse_formatter : string -> formatter list = fun s ->
 and aux = function
   | 'd' -> FInt
   | 's' -> FStr
+  | 'f' -> FFloat
   | '%' -> FChar '%'
   | _ -> raise (Failure "Invalid formatter")
 
@@ -41,29 +39,35 @@ let print_formatter = function
   | FChar c -> print_char c
   | FInt -> print_string "%d"
   | FStr -> print_string "%s"
+  | FFloat -> print_string "%f"
 
-let hd vars = match List.hd vars with
-  | BInt ic -> Obj.magic ic
-  | BStr sc -> Obj.magic sc
-let tl = List.tl
+let rec concat_codes1 : unit code list -> unit code = function
+  | [] -> .<()>.
+  | h::t -> .<(.~h; .~(concat_codes1 t))>.
 
-let rec func2 fmt vars =
-  match fmt with
+let rec concat_codes2 : unit code code list -> unit code code = function
   | [] -> .<.<()>.>.
-  | (FChar c)::f -> if c == '\n'
-                    then .<.<(print_newline (); .~.~(func2 f vars))>.>.
-                    else .<.<(print_char c; .~.~(func2 f vars))>.>.
-  | (FInt)::f -> .<.<(print_int .~.~(hd vars); .~.~(func2 f (tl vars)))>.>.
-  | (FStr)::f -> .<.<(print_string .~.~(hd vars); .~.~(func2 f (tl vars)))>.>.
+  | h::t -> .<.<(.~.~h; .~.~(concat_codes2 t))>.>.
 
-let rec func fmts vars fmts2 =
+let rec concat_codes2_rev : unit code code list -> unit code code = function
+  | [] -> .<.<()>.>.
+  | h::t -> .<.<(.~.~(concat_codes2_rev t); .~.~h)>.>.
+
+let rec func fmts vars =
   match fmts with
-  | [] -> Obj.magic func2 fmts2 vars
-  | (FChar c)::f -> Obj.magic (func f vars fmts2)
-  | (FInt)::f -> Obj.magic .<fun i -> .~(func f (vars @ [BInt .<.<i>.>.]) fmts2)>.
-  | (FStr)::f -> Obj.magic .<fun s -> .~(func f (vars @ [BStr .<.<s>.>.]) fmts2)>.
+  | [] -> Obj.magic (concat_codes2_rev vars)
+  | (FChar c)::f -> .<.~(func f (.<.<print_char c>.>.::vars))>.
+  | (FInt)::f ->
+     Obj.magic .<fun i ->
+                 .~(func f (.<.<print_int i>.>.::vars))>.
+  | (FStr)::f ->
+     Obj.magic .<fun s ->
+                 .~(func f (.<.<print_string s>.>.::vars))>.
+  | (FFloat)::f ->
+     Obj.magic .<fun fl ->
+                 .~(func f (.<.<print_float fl>.>.::vars))>.
 
 let mprintf : ('a, 'b, 'c) format -> 'a code = fun f ->
   let str = string_of_format f in
   let fmt = parse_formatter str in
-  func fmt [] fmt
+  func fmt []
