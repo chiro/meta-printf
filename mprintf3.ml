@@ -1,3 +1,5 @@
+open Runcode
+
 module S = String
 
 (*
@@ -41,17 +43,25 @@ let print_formatter = function
   | FStr -> print_string "%s"
   | FFloat -> print_string "%f"
 
-let rec concat_codes1 : unit code list -> unit code = function
-  | [] -> .<()>.
-  | h::t -> .<(.~h; .~(concat_codes1 t))>.
-
+(*
+  concat_code2 [.<.<ignore(1)>.>.; .<.<ignore(2)>.>.]
+  ==> .<.<ignore(1); ignore(2)>.>.
+ *)
 let rec concat_codes2 : unit code code list -> unit code code = function
   | [] -> .<.<()>.>.
-  | h::t -> .<.<(.~.~h; .~.~(concat_codes2 t))>.>.
+  | h::t ->
+     List.fold_right
+     (fun code acc -> .<.<(.~.~acc; .~.~code)>.>.) t h
 
+(*
+  concat_code2_rev [.<.<ignore(1)>.>.; .<.<ignore(2)>.>.]
+  ==> .<.<ignore(2); ignore(1)>.>.
+ *)
 let rec concat_codes2_rev : unit code code list -> unit code code = function
   | [] -> .<.<()>.>.
-  | h::t -> .<.<(.~.~(concat_codes2_rev t); .~.~h)>.>.
+  | h::t ->
+     List.fold_left
+       (fun code acc -> .<.<(.~.~acc ; .~.~code)>.>.) h t
 
 let rec func fmts vars =
   match fmts with
@@ -67,7 +77,7 @@ let rec func fmts vars =
      Obj.magic .<fun fl ->
                  .~(func f (.<.<print_float fl>.>.::vars))>.
 
-let mprintf : ('a, 'b, 'c) format -> 'a code = fun f ->
+let mprintf = fun f ->
   let str = string_of_format f in
   let fmt = parse_formatter str in
-  func fmt []
+  !. (func fmt [])
