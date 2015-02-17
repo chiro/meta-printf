@@ -1,7 +1,7 @@
 meta-printf
 ===========
 
-This is the experimental implementation of precompiling printf and sprintf in MetaOCaml.
+An experimental implementation of precompiling printf and sprintf in MetaOCaml.
 
 ## Examples
 ```ocaml
